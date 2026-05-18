@@ -16,6 +16,7 @@
 
 #include "string.h"
 #include "mm.h"
+#include "mm64.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -155,7 +156,7 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz)
 
   // prepare the object for the following TODO block:
 
-  struct vm_rg_struct *area = get_vm_area_node_at_brk(caller, vmaid, inc_amt);
+  struct vm_rg_struct *area = get_vm_area_node_at_brk(caller, vmaid, inc_amt, inc_amt);
   area->vmaid = vmaid; // i dunno why the given func does not modify the vmaid...
 
   /* TODO Validate overlap of obtained region */
@@ -172,7 +173,7 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz)
   cur_vma->sbrk = area->rg_end;
   /* The obtained vm area (only)
    * now will be alloc real ram region */
-  struct vm_rg_struct newrg = malloc(sizeof(struct vm_rg_struct));
+  newrg = malloc(sizeof(struct vm_rg_struct));
 
   if (vm_map_ram(caller, area->rg_start, area->rg_end,
                  old_end, incnumpage, newrg) < 0)
