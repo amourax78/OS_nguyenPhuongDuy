@@ -13,6 +13,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+#define MLQ_SCHED
+#define MM_PAGING
+#define MM_FIXED_MEMSZ
+
 static int time_slot;
 static int num_cpus;
 static int done = 0;
