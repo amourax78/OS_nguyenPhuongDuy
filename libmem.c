@@ -338,6 +338,8 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller)
    *  MEMPHY WRITE with SYSMEM_IO_WRITE
    * SYSCALL 17 sys_memmap
    */
+  addr_t phyaddr = (addr_t)fpn * PAGING64_PAGESZ + off;
+  return MEMPHY_write(caller->krnl->mram, phyaddr, data);
 
   return 0;
 }
@@ -352,15 +354,25 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller)
  */
 int __read(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE *data)
 {
+  pthread_mutex_lock(&mmvm_lock); // i think i need to lock this too, thus everything else did
+
   struct vm_rg_struct *currg = get_symrg_byid(caller->krnl->mm, rgid);
 
   // struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
+  if (offset >= (currg->rg_end - currg->rg_start))
+  {
+    pthread_mutex_unlock(&mmvm_lock);
+    return -1; // invalid offset
+  }
 
   /* TODO Invalid memory identify */
 
   pg_getval(caller->krnl->mm, currg->rg_start + offset, data, caller);
 
-  return 0;
+  int ret = pg_getval(caller->krnl->mm, access_addr, data, caller);
+
+  pthread_mutex_unlock(&mmvm_lock);
+  return ret;
 }
 
 /*libread - PAGING-based read a region memory */
@@ -400,16 +412,22 @@ int __write(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE value
 
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
 
+  if (offset >= (currg->rg_end - currg->rg_start))
+  {
+    pthread_mutex_unlock(&mmvm_lock);
+    return -1; // invalid offset
+  }
+
   if (currg == NULL || cur_vma == NULL) /* Invalid memory identify */
   {
     pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
 
-  pg_setval(caller->krnl->mm, currg->rg_start + offset, value, caller);
+  int ret = pg_getval(caller->krnl->mm, access_addr, data, caller);
 
   pthread_mutex_unlock(&mmvm_lock);
-  return 0;
+  return ret;
 }
 
 /*libwrite - PAGING-based write a region memory */
