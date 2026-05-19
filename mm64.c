@@ -196,6 +196,8 @@ uint32_t pte_get_entry(struct pcb_t *caller, addr_t pgn)
   //... krnl->mm->pt
   // pte = &krnl->mm->pt;
 
+  pte = (uint32_t)krnl->mm->pt[pt];
+
   return pte;
 }
 
@@ -255,6 +257,7 @@ addr_t vmap_page_range(struct pcb_t *caller,           // process call
 
   struct mm_struct *mm = caller->krnl->mm;
 
+  // find the vma that contains the start address
   struct vm_area_struct *vma = mm->mmap;
   while (vma != NULL)
   {
@@ -265,6 +268,7 @@ addr_t vmap_page_range(struct pcb_t *caller,           // process call
     }
     vma = vma->vm_next;
   }
+
   /* TODO map range of frame to address space
    *      [addr to addr + pgnum*PAGING_PAGESZ
    *      in page table caller->krnl->mm->pgd,
@@ -286,29 +290,35 @@ addr_t vmap_page_range(struct pcb_t *caller,           // process call
     addr_t pte_val = 0;
 
     get_pd_from_address(cur_addr, &pgd, &p4d, &pud, &pmd, &pt);
+
+    // mapping
     mm->pgd[pgd] = (addr_t)mm->p4d;
     mm->p4d[p4d] = (addr_t)mm->pud;
     mm->pud[pud] = (addr_t)mm->pmd;
     mm->pmd[pmd] = (addr_t)mm->pt;
 
+    // this one just existed before me
     SETBIT(pte_val, PAGING_PTE_PRESENT_MASK);
     CLRBIT(pte_val, PAGING_PTE_SWAPPED_MASK);
     CLRBIT(pte_val, PAGING_PTE_DIRTY_MASK);
     SETVAL(pte_val, fpit->fpn, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
 
+    // write PTE to the PTE table
     mm->pt[pt] = pte_val;
 
     fpit->owner = mm;
 
-    ret_rg->rg_end = addr + ((addr_t)(mapped_pgnum + 1) * PAGING64_PAGESZ);
+    mapped_pgnum++;
+    ret_rg->rg_end = addr + ((addr_t)mapped_pgnum * PAGING64_PAGESZ);
+
     /* Tracking for later page replacement activities (if needed)
      * Enqueue new usage page */
     enlist_pgn_node(&caller->krnl->mm->fifo_pgn, pgn64);
 
     fpit = fpit->fp_next;
     pgit++;
-    mapped_pgnum++;
   }
+
   // enlist_pgn_node(&caller->krnl->mm->fifo_pgn, pgn64 + pgit);
 
   return 0;
@@ -357,7 +367,7 @@ addr_t alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_st
     }
     else
     { // TODO: ERROR CODE of obtaining somes but not enough frames
-      return -3000;
+      return (addr_t)(-3000);
       // return as same as error code when out of mem in vm_map_ram
     }
   }
